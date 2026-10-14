@@ -1,0 +1,237 @@
+{
+  "info": {
+    "_postman_id": "7da69d26-b7fe-4a8a-b8a7-72a772f57b04",
+    "name": "ShopKart API",
+    "description": "Local API checks for ShopKart Lab 01 and Lab 02. Run Happy path requests in shown order. Postman retains HttpOnly login cookie in its cookie jar.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Health",
+      "item": [
+        {
+          "name": "Health check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Reports healthy server', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "description": "Confirms Express server is reachable. This does not test database authentication."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 Happy path",
+      "item": [
+        {
+          "name": "Register fresh customer",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.environment.set('testEmail', 'shopkart.' + Date.now() + '@example.com');",
+                  "pm.environment.set('testPassword', 'secret123');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Returns customer without password', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.success).to.eql(true);",
+                  "  pm.expect(body.customer.email).to.eql(pm.environment.get('testEmail'));",
+                  "  pm.expect(body.customer).not.to.have.property('password');",
+                  "});",
+                  "pm.test('Sets login cookie', () => pm.expect(pm.response.headers.get('Set-Cookie')).to.include('token='));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Postman Test Customer\",\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"phone\": \"9876543210\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/customers/register",
+            "description": "Creates unique disposable customer and receives login cookie."
+          },
+          "response": []
+        },
+        {
+          "name": "Log in registered customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns matching customer', () => pm.expect(pm.response.json().customer.email).to.eql(pm.environment.get('testEmail')));",
+                  "pm.test('Sets login cookie', () => pm.expect(pm.response.headers.get('Set-Cookie')).to.include('token='));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/customers/login",
+            "description": "Checks bcrypt password comparison and refreshes login cookie."
+          },
+          "response": []
+        },
+        {
+          "name": "Get current customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns logged-in customer', () => pm.expect(pm.response.json().email).to.eql(pm.environment.get('testEmail')));",
+                  "pm.test('Never returns password', () => pm.expect(pm.response.json()).not.to.have.property('password'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/customers/me",
+            "description": "Requires cookie saved by Postman. Tests JWT verification and protected route."
+          },
+          "response": []
+        },
+        {
+          "name": "Log out",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Confirms logout', () => pm.expect(pm.response.json().success).to.eql(true));",
+                  "pm.test('Clears login cookie', () => pm.expect(pm.response.headers.get('Set-Cookie')).to.include('token='));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/customers/logout",
+            "description": "Clears login cookie. Run this after current-customer request."
+          },
+          "response": []
+        },
+        {
+          "name": "Current customer after logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Returns 401 after logout', () => pm.response.to.have.status(401));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/customers/me",
+            "description": "Proves private route rejects request after cookie clearing."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 Expected validation failures",
+      "item": [
+        {
+          "name": "Register with missing fields",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Explains required fields', () => pm.expect(pm.response.json().message).to.eql('All fields are required'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"missing@example.com\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/customers/register",
+            "description": "Checks backend validation. It must reject incomplete input even if frontend is bypassed."
+          },
+          "response": []
+        },
+        {
+          "name": "Log in with wrong password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Uses safe generic error', () => pm.expect(pm.response.json().message).to.eql('Invalid credentials'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"wrong-password\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/customers/login",
+            "description": "Run after Register fresh customer. Server should not reveal whether email exists."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
